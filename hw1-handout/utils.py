@@ -79,6 +79,26 @@ def loadUserMatrix(fileName: str):
         matrix[user][qNum] = vector
     return matrix
         
+def loadData(args, dbg):
+    '''
+    Loads all data
+    '''
+    transitionDict, transitionSparse = loadTransitionMatrix(args.transition)
+    dbg("Transition: ", len(transitionDict), transitionSparse.shape)
+    
+    queryTopics = loadQueryMatrix(args.queryTopics)
+    dbg("Query: ", len(queryTopics))
+    
+    docTopics = loadQueryMatrix(args.docTopics)
+    dbg("Doc Topics: ", len(docTopics))
+    
+    userTopics = loadUserMatrix(args.userTopics)
+    dbg("User Topics: ", len(userTopics))
+
+    dbg("Finished loading data")
+    
+    return transitionDict, transitionSparse, queryTopics, docTopics, userTopics
+
 class debugPrint:
     def __init__(self, flag):
         self.flag = flag
