@@ -2,6 +2,8 @@ from collections import defaultdict
 import argparse
 import numpy as np
 import scipy.sparse as sp
+from tqdm import tqdm
+import os
 
 def getArgs():
     '''
@@ -17,29 +19,51 @@ def getArgs():
     parser.add_argument("--userTopics", type=str, default="./data/user-topic-distro.txt",
                         help="path to user-topic distribution matrix")
     parser.add_argument("--debug", action='store_true', default=False)
+    parser.add_argument("--algo", type=str, default="GPR", help="One of [GPR, QTSPR, PTSPR]")
     
     args = parser.parse_args()
     print(f"args: {vars(args)}")
     return args
 
 
-def loadTransitionMatrix(fileName: str):
+def loadTransitionMatrix(fileName: str, numDocs: int):
     '''
     Loads the sparse transition matrix.
     Converts it into a dictionary of int to list of int of transitions
     '''
+    
+    if os.path.exists("./data/sparseTransition.npz"):
+        sparseMatrix = sp.load_npz("./data/sparseTransition.npz")
+        return sparseMatrix
+    
     data = np.loadtxt(fileName, dtype=np.int)
-    
-    row    = data[:, 0]
-    col    = data[:, 1]
-    values = data[:, 2]
-    sparseMatrix = sp.csr_matrix((values, (row, col)), dtype=np.int8)
-    
     matrix = defaultdict(lambda: [])
     for row in data:
-        src, dst = row[0], row[1]
+        src, dst = row[0] - 1, row[1] - 1
         matrix[src].append(dst)
-    return matrix, sparseMatrix
+    
+    row    = data[:, 0] - 1
+    col    = data[:, 1] - 1
+    values = data[:, 2]
+    sparseMatrix = sp.csr_matrix((values, (row, col)), dtype=np.int8, shape=(numDocs, numDocs))
+    
+    # lil matrix is faster when changing sparsity of csr
+    SMLil = sparseMatrix.tolil()
+    rows,cols = SMLil.nonzero()
+    for r,c in tqdm(zip(rows,cols), desc="Setting non Zeros"):
+        SMLil[r,c] = 1 / SMLil.getrow(r).sum()
+    
+    for r in tqdm(range(numDocs), desc="Setting zeros"):
+        if r not in matrix:
+            rowVector = np.ones(numDocs)
+            rowVector[r] = 0
+            rowVector = rowVector / numDocs-1
+            SMLil[r] = rowVector
+    
+    # convert back to csr matrix
+    sparseMatrix = SMLil.tocsr()
+    sp.save_npz("./data/sparseTransition.npz", sparseMatrix)
+    return sparseMatrix
 
 def loadQueryMatrix(fileName: str):
     '''
@@ -49,7 +73,7 @@ def loadQueryMatrix(fileName: str):
     data = np.loadtxt(fileName, dtype=object, delimiter=" ")
     matrix = defaultdict(lambda: {})
     for row in data:
-        user, qNum = row[0], row[1]
+        user, qNum = int(row[0])-1, int(row[1])-1
         vector = np.array([item.split(':')[1] for item in row[2:]], dtype = np.float)
         matrix[user][qNum] = vector
     return matrix
@@ -63,8 +87,8 @@ def loadDocTopics(fileName:str):
     for row in data:
         doc, topic = row[0], row[1]
         matrix[doc].append(topic)
-    
-    return matrix
+    numDocs = np.max(data[:,0])
+    return matrix, numDocs
 
 def loadUserMatrix(fileName: str): 
     '''
@@ -74,7 +98,7 @@ def loadUserMatrix(fileName: str):
     data = np.loadtxt(fileName, dtype=object, delimiter=" ")
     matrix = defaultdict(lambda: {})
     for row in data:
-        user, qNum = row[0], row[1]
+        user, qNum = int(row[0])-1, int(row[1])-1
         vector = np.array([item.split(':')[1] for item in row[2:]], dtype = np.float)
         matrix[user][qNum] = vector
     return matrix
@@ -83,21 +107,23 @@ def loadData(args, dbg):
     '''
     Loads all data
     '''
-    transitionDict, transitionSparse = loadTransitionMatrix(args.transition)
-    dbg("Transition: ", len(transitionDict), transitionSparse.shape)
+    # 1: Doc topics
+    docTopics, numDocs = loadDocTopics(args.docTopics)
+    dbg("Doc Topics: ", len(docTopics))
+    dbg("Num Docs: ", numDocs)
+    
+    transitionSparse = loadTransitionMatrix(args.transition, numDocs)
+    dbg("Transition: ", transitionSparse.shape)
     
     queryTopics = loadQueryMatrix(args.queryTopics)
     dbg("Query: ", len(queryTopics))
-    
-    docTopics = loadQueryMatrix(args.docTopics)
-    dbg("Doc Topics: ", len(docTopics))
     
     userTopics = loadUserMatrix(args.userTopics)
     dbg("User Topics: ", len(userTopics))
 
     dbg("Finished loading data")
     
-    return transitionDict, transitionSparse, queryTopics, docTopics, userTopics
+    return transitionSparse, queryTopics, docTopics, numDocs, userTopics
 
 class debugPrint:
     def __init__(self, flag):
