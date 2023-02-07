@@ -47,21 +47,24 @@ def loadTransitionMatrix(fileName: str, numDocs: int):
     values = data[:, 2]
     sparseMatrix = sp.csr_matrix((values, (row, col)), dtype=np.int8, shape=(numDocs, numDocs))
     
+    rowSums = np.array(sparseMatrix.sum(axis=1))[:,0]
+    rows,cols = sparseMatrix.nonzero()
+    sparseMatrix.data = sparseMatrix.data / rowSums[rows]
+    # for r,c in tqdm(zip(rows,cols), desc="Setting non Zeros"):
+    #     sparseMatrix[r,c] = 1 / len(matrix[r])
+    
     # lil matrix is faster when changing sparsity of csr
-    SMLil = sparseMatrix.tolil()
-    rows,cols = SMLil.nonzero()
-    for r,c in tqdm(zip(rows,cols), desc="Setting non Zeros"):
-        SMLil[r,c] = 1 / SMLil.getrow(r).sum()
-    
+    sparseMatrix = sparseMatrix.tolil()
     for r in tqdm(range(numDocs), desc="Setting zeros"):
-        if r not in matrix:
-            rowVector = np.ones(numDocs)
+        if rowSums[r] == 0:
+            rowVector = np.ones(numDocs, dtype=np.float64)
             rowVector[r] = 0
-            rowVector = rowVector / numDocs-1
-            SMLil[r] = rowVector
-    
-    # convert back to csr matrix
-    sparseMatrix = SMLil.tocsr()
+            rowVector = rowVector / (numDocs-1)
+            sparseMatrix[r] = rowVector    
+            
+    # # convert back to csr matrix
+    sparseMatrix = sparseMatrix.tocsr()
+    # assert sparseMatrix.sum(axis=1).sum() == numDocs
     sp.save_npz("./data/sparseTransition.npz", sparseMatrix)
     return sparseMatrix
 

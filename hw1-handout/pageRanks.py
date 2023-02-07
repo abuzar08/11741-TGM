@@ -9,3 +9,5 @@ def getTeleportationMatrix(numDocs):
     p_zero =  np.ones(numDocs) / numDocs
     ones   =  np.ones(numDocs)
     return p_zero, ones
+
+# def get
