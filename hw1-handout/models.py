@@ -1,9 +1,13 @@
+from abc import ABC, abstractmethod
+
 import numpy as np
 import scipy.sparse as sp
+
+import config
+import retrieval
 import utils
 from utils import StatusCode
-import config
-from abc import ABC, abstractmethod
+
 
 class Ranker(ABC):
     def __init__(self, numDocs, args, alpha = 0.8, r=None):
@@ -26,7 +30,7 @@ class Ranker(ABC):
             self.transitionMatrix = utils.loadTransitionMatrix(savePath=config.TRANSITION_PATH)
         else:
             self.transitionMatrix = utils.loadTransitionMatrix(fileName=args.transition, numDocs=self.numDocs)
-        
+        self.args = args
         self.p_0 = None
         self.r = r
             
@@ -35,6 +39,9 @@ class Ranker(ABC):
     @abstractmethod
     def initializeAlgorithm(self, args):
         pass
+    
+    def getRawScores(self):
+        return np.array(self.r)
     
     def step(self):
         '''
@@ -78,8 +85,21 @@ class pageRanks(Ranker):
         if self.r is None:
             self.r = np.random.normal(0,1,size=self.numDocs)
     
-    def getRanks(self):
-        return self.r
+    def getRanks(self, indriDocs, usr, qNo, scoringFunction = retrieval.base, queries=None):
+        scores = self.getRawScores()
+        docs   = indriDocs[usr][qNo]["docs"]
+        
+        rawScores = scores[docs]
+        scores    = scoringFunction(rawScores, indriDocs[usr][qNo]["relevance"])
+        indriDocs[usr][qNo]["scores"] = scores
+        
+        ranks = np.argsort(-scores)
+        indriDocs[usr][qNo]["ranks"] = ranks
+        
+        return indriDocs
+    
+    def getAllRanks(self):
+        return np.argsort(-self.getRawScores())
 
 
 class pageRanksPersonalized(Ranker):
@@ -96,14 +116,28 @@ class pageRanksPersonalized(Ranker):
         self.p_0 = docTopics.T # (numDocs,12)
         if self.r is None:
             self.r   = np.random.normal(0,1,size=(self.numDocs, config.NUM_TOPICS))
-
-    def getRawRanks(self):
-        return self.r
+        
+    def getPersonalizedScores(self, topicDistribution):
+        rawScores = self.getRawScores()
+        personalizedScores = rawScores @ topicDistribution
+        personalizedScores = personalizedScores.flatten()
+        return personalizedScores
     
-    def getRanks(self, queryTopicDist):
-        scores =  np.array(self.r @ queryTopicDist)
-        scores = scores.flatten()
-        return scores
+    def getRanks(self, indriDocs, queries, usr, qNo, scoringFunction = retrieval.base):
+        topicDistribution = queries[usr][qNo]
+        docs   = indriDocs[usr][qNo]["docs"]
+        
+        scores = self.getPersonalizedScores(topicDistribution)
+        scores = scores[docs]
+        scores    = scoringFunction(scores, indriDocs[usr][qNo]["relevance"])
+        
+        indriDocs[usr][qNo]["scores"] = scores
+        
+        ranks = np.argsort(-scores)
+        indriDocs[usr][qNo]["ranks"] = ranks
+        
+        return indriDocs
+        
 
 def getRanker(args):
     if args.algo == "GPR":

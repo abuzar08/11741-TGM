@@ -1,9 +1,13 @@
-import utils
-import models
-import numpy as np
-from utils import StatusCode
 import argparse
+
+import numpy as np
+
 import config
+import models
+import retrieval
+import utils
+from utils import StatusCode
+
 
 def getArgs():
     '''
@@ -40,33 +44,29 @@ if __name__ == "__main__":
     
     dbg("Algorithm: ",args.algo)
     ranker = models.getRanker(args)
+    indriDocs = utils.loadIndri()
     
     status  = ranker.run(eps=config.EPS)
     if status == StatusCode.FAILURE:
         print(f"Failed to converge in {config.MAX_ITERS} iterations")
     
     if args.algo == "GPR":
+        queries = None
         ranks = ranker.getRanks()
         order = np.argsort(-ranks)
         print(order[:20])
     
-    elif args.algo == "QTSPR":
-        queries = utils.loadQueries(args.queryTopics) # dictionary
-        indriDocs = utils.loadIndri(queries)
+    else:
+        if args.algo == "QTSPR":
+            queries = utils.loadQueries(args.queryTopics) # dictionary
         
-        print(f"Only running test on user 2, query 1")
-        ranks = ranker.getRanks(queries[2][1])
-        print(ranks.shape)
-        order = np.argsort(-ranks)
-        print(order[:20])
-    
-    elif args.algo == "PTSPR":
-        queries = utils.loadQueries(args.userTopics) # dictionary
-        indriDocs = utils.loadIndri(queries)
+        elif args.algo == "PTSPR":
+            queries = utils.loadQueries(args.userTopics) # dictionary
         
-        print(f"Only running test on user 6, query 4")
-        ranks = ranker.getRanks(queries[6][4])
-        print(ranks.shape)
-        order = np.argsort(-ranks)
-        print(order[:20])
+        for usr in indriDocs:
+            for qNo in indriDocs[usr]:
+                indriDocs = ranker.getRanks(indriDocs=indriDocs,
+                                usr= usr, qNo= qNo, 
+                                queries=queries,
+                                scoringFunction=retrieval.base)
         

@@ -1,11 +1,13 @@
-from collections import defaultdict
 import argparse
+import os
+from collections import defaultdict
+
 import numpy as np
 import scipy.sparse as sp
 from tqdm import tqdm
-import os
+
 import config
-import os
+
 
 class StatusCode(enumerate):
     SUCCESS = 0
@@ -113,7 +115,7 @@ class debugPrint:
         if self.flag:
             print(*args)
 
-def loadIndri(queries):
+def loadIndri():
     '''
     DESCRIPTION
         Loads documents, relevance Scores, and ranks from indri-lists as a dictionary
@@ -122,16 +124,21 @@ def loadIndri(queries):
     ---
         queries (dict{ user(int): dict{query(int): np.array()}}): Queries loaded from loadQueries()
     '''
-    indriDocs = defaultdict(lambda: {})
-    for user in queries:
-        for query in queries[user]:
-            path = os.path.join(config.INDRI_PATH, f"{user}-{query}.results.txt")
-            q_id = f"{user}-{query}"
-            data = np.loadtxt(path, dtype=object, delimiter=" ")
-            docs   = data[:, 2].astype(np.int)
-            ranks  = data[:, 3].astype(np.int)
-            scores = data[:, 4].astype(np.float)
-            indriDocs[q_id]["docs"]   = docs
-            indriDocs[q_id]["scores"] = scores
-            indriDocs[q_id]["ranks"]  = ranks
+    indriDocs = defaultdict(lambda: defaultdict(lambda: {}))
+    filesNames     = os.listdir(config.INDRI_PATH)
+    
+    for filename in filesNames:
+        q_id = filename.split('.')[0]
+        usr, qNo = q_id.split('-')
+        usr, qNo = int(usr), int(qNo)
+        
+        path = os.path.join(config.INDRI_PATH, filename)
+        data = np.loadtxt(path, dtype=object, delimiter=" ")
+        
+        docs      = data[:, 2].astype(np.int)
+        relevance = data[:, 4].astype(np.float)
+        
+        indriDocs[usr][qNo]["docs"]      = docs
+        indriDocs[usr][qNo]["relevance"] = relevance
+        
     return indriDocs
