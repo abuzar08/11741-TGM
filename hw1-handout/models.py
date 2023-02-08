@@ -10,7 +10,7 @@ from utils import StatusCode
 
 
 class Ranker(ABC):
-    def __init__(self, numDocs, args, alpha = 0.8, r=None):
+    def __init__(self, numDocs, args, r=None):
         '''
         DESCRIPTION
         ---
@@ -25,7 +25,13 @@ class Ranker(ABC):
         '''
         
         self.numDocs = numDocs
-        self.alpha = 1-alpha if args.algo=="GPR" else alpha
+        self.alpha = 1-args.alpha if args.algo=="GPR" else args.alpha
+        
+        if args.algo != "GPR":
+            self.beta  = args.beta
+            self.gamma = args.gamma
+            assert self.alpha + self.beta + self.gamma == 1.0, f"Non convex weights"
+            
         if args.load_saved_matrix:
             self.transitionMatrix = utils.loadTransitionMatrix(savePath=config.TRANSITION_PATH)
         else:
@@ -82,19 +88,21 @@ class pageRanks(Ranker):
     
     def initializeAlgorithm(self, args):
         self.p_0 = np.ones(self.numDocs) / self.numDocs
+        self.alpha = 1-args.alpha
         if self.r is None:
-            self.r = np.random.normal(0,1,size=self.numDocs)
+            # self.r = np.random.normal(0,1,size=self.numDocs)
+            self.r = np.zeros(self.numDocs)
     
     def getRanks(self, indriDocs, usr, qNo, scoringFunction = retrieval.base, queries=None):
         scores = self.getRawScores()
         docs   = indriDocs[usr][qNo]["docs"]
         
-        rawScores = scores[docs]
+        rawScores = scores[docs-1]
         scores    = scoringFunction(rawScores, indriDocs[usr][qNo]["relevance"])
         indriDocs[usr][qNo]["scores"] = scores
         
-        ranks = np.argsort(-scores)
-        indriDocs[usr][qNo]["ranks"] = ranks
+        positions = np.argsort(np.argsort(-scores)) # get positions of document in a sorted array
+        indriDocs[usr][qNo]["positions"] = positions
         
         return indriDocs
     
@@ -108,14 +116,28 @@ class pageRanksPersonalized(Ranker):
         docTopics = utils.loadDocTopics(args.docTopics) # (numDocs,12)
         docTopics = docTopics.T # (12, numDocs)
         
+        self.alpha = args.alpha
+        self.beta = args.beta
+        self.gamma = args.gamma
+        
+        assert self.alpha + self.beta + self.gamma == 1.0, f"Non-convex weights"
+        
         # normalized doctopics
         rowSums = np.array(docTopics.sum(axis=1))[:,0]
         rows,cols = docTopics.nonzero()
         docTopics.data = docTopics.data / rowSums[rows]
         
-        self.p_0 = docTopics.T # (numDocs,12)
+        self.p_t = docTopics.T # (numDocs,12)
+        self.p_0 = np.ones((self.numDocs, config.NUM_TOPICS)) / self.numDocs
         if self.r is None:
-            self.r   = np.random.normal(0,1,size=(self.numDocs, config.NUM_TOPICS))
+            # self.r   = np.random.normal(0,1,size=(self.numDocs, config.NUM_TOPICS))
+            self.r   = np.zeros((self.numDocs, config.NUM_TOPICS))
+    
+    def step(self):
+        '''
+        Carries out one update step for the pageRanks algorithm.
+        '''
+        self.r = ((self.alpha)*self.transitionMatrix).T@self.r + self.beta*self.p_t + self.gamma*self.p_0
         
     def getPersonalizedScores(self, topicDistribution):
         rawScores = self.getRawScores()
@@ -128,13 +150,13 @@ class pageRanksPersonalized(Ranker):
         docs   = indriDocs[usr][qNo]["docs"]
         
         scores = self.getPersonalizedScores(topicDistribution)
-        scores = scores[docs]
+        scores = scores[docs-1]
         scores    = scoringFunction(scores, indriDocs[usr][qNo]["relevance"])
         
         indriDocs[usr][qNo]["scores"] = scores
         
-        ranks = np.argsort(-scores)
-        indriDocs[usr][qNo]["ranks"] = ranks
+        positions = np.argsort(np.argsort(-scores)) # get positions of document in a sorted array
+        indriDocs[usr][qNo]["positions"] = positions
         
         return indriDocs
         

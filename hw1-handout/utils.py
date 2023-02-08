@@ -65,12 +65,12 @@ def loadQueries(fileName):
     Converts it into a dictionary of int to dictionary of topic distribution vectors.
     '''
     data = np.loadtxt(fileName, dtype=object, delimiter=" ")
-    matrix = defaultdict(lambda: {})
+    queries = defaultdict(lambda: {})
     for row in data:
         user, qNum = int(row[0]), int(row[1])
         vector = np.array([item.split(':')[1] for item in row[2:]], dtype = np.float)
-        matrix[user][qNum] = vector
-    return matrix
+        queries[user][qNum] = vector
+    return queries
 
 def loadDocTopics(fileName:str):
     '''
@@ -124,8 +124,8 @@ def loadIndri():
     ---
         queries (dict{ user(int): dict{query(int): np.array()}}): Queries loaded from loadQueries()
     '''
-    indriDocs = defaultdict(lambda: defaultdict(lambda: {}))
-    filesNames     = os.listdir(config.INDRI_PATH)
+    indriDocs  = defaultdict(lambda: defaultdict(lambda: {}))
+    filesNames = os.listdir(config.INDRI_PATH)
     
     for filename in filesNames:
         q_id = filename.split('.')[0]
@@ -140,5 +140,43 @@ def loadIndri():
         
         indriDocs[usr][qNo]["docs"]      = docs
         indriDocs[usr][qNo]["relevance"] = relevance
-        
+    
     return indriDocs
+
+def makeOuputFile(indriDocs, usr, qNo, args):
+    q_id = f"{usr}-{qNo}"
+    info = indriDocs[usr][qNo]
+    data = []
+    run_id = f"{args.algo}-{args.scorer}"
+    for i in range(len(indriDocs[usr][qNo]["docs"])):
+        document = info["docs"][i]
+        # position     = info["positions"][i]+1
+        score    = info["scores"][i]
+        row = (q_id, "Q0", document, score, run_id)
+        data.append(row)
+    
+    data.sort(key=lambda x: -x[3])
+    return data
+
+def printOutputData(data, n = 10):
+    for i in range(n):
+        print(data[i])
+
+def writeOutput(data):
+    run_id = data[0][-1]
+    filename = f"./output/{run_id}.outputs.txt"
+    writeLines = []
+    rank = 0
+    last_id = None
+    for i,row in enumerate(data):
+        if last_id!=row[0]:
+            last_id = row[0]
+            rank = 1
+        line = f"{row[0]} {row[1]} {row[2]} {rank} {row[3]} {row[4]}\n"
+        writeLines.append(line)
+        rank += 1
+    
+    with open(filename, 'w') as f:
+        f.writelines(writeLines)
+    
+        

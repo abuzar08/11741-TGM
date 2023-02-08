@@ -7,3 +7,5 @@ INDRI_PATH      = "./data/indri-lists"
 NUM_TOPICS = 12
 NUM_DOCS   = 81433
 MAX_ITERS  = 1000
+
+WS_WEIGHT = 0.5

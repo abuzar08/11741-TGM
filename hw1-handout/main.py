@@ -23,9 +23,14 @@ def getArgs():
                         help="path to document topic matrix")
     parser.add_argument("--userTopics", type=str, default="./data/user-topic-distro.txt",
                         help="path to user-topic distribution matrix")
+    
     parser.add_argument("--debug", action='store_true', default=False)
     parser.add_argument("--algo", type=str, default="GPR", help="One of [GPR, QTSPR, PTSPR]")
     parser.add_argument("--seed", type=int, default=config.SEED)
+    parser.add_argument("--alpha", type=float, default=0.8)
+    parser.add_argument("--beta",  type=float, default=0.1)
+    parser.add_argument("--gamma", type=float, default=0.1)
+    parser.add_argument("--scorer", type=str, default="NS", help="default NS. To change, use WS or CS")
     
     args = parser.parse_args()
     print(f"args: {vars(args)}")
@@ -47,26 +52,32 @@ if __name__ == "__main__":
     indriDocs = utils.loadIndri()
     
     status  = ranker.run(eps=config.EPS)
+    
     if status == StatusCode.FAILURE:
         print(f"Failed to converge in {config.MAX_ITERS} iterations")
     
     if args.algo == "GPR":
         queries = None
-        ranks = ranker.getRanks()
-        order = np.argsort(-ranks)
-        print(order[:20])
     
-    else:
-        if args.algo == "QTSPR":
-            queries = utils.loadQueries(args.queryTopics) # dictionary
+    elif args.algo == "QTSPR":
+        queries = utils.loadQueries(args.queryTopics) # dictionary
         
-        elif args.algo == "PTSPR":
-            queries = utils.loadQueries(args.userTopics) # dictionary
+    elif args.algo == "PTSPR":
+        queries = utils.loadQueries(args.userTopics) # dictionary
         
+    for scorer in ["NS", "WS", "CS"]:
+        args.scorer = scorer
+        scoringFunction = retrieval.getScorer(args)
+        allData = []
         for usr in indriDocs:
             for qNo in indriDocs[usr]:
                 indriDocs = ranker.getRanks(indriDocs=indriDocs,
                                 usr= usr, qNo= qNo, 
                                 queries=queries,
-                                scoringFunction=retrieval.base)
+                                scoringFunction=scoringFunction)
+                data = utils.makeOuputFile(indriDocs, usr, qNo, args)
+                allData.extend(data)
+        
+        utils.writeOutput(allData)
+            
         
