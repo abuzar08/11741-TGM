@@ -162,9 +162,9 @@ def printOutputData(data, n = 10):
     for i in range(n):
         print(data[i])
 
-def writeOutput(data):
+def writeOutput(data, args):
     run_id = data[0][-1]
-    filename = f"./output/{run_id}.outputs.txt"
+    filename = f"./output/{run_id}-{args.alpha}-{args.beta}-{args.gamma}.outputs.txt"
     writeLines = []
     rank = 0
     last_id = None

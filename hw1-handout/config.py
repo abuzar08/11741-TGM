@@ -6,6 +6,8 @@ INDRI_PATH      = "./data/indri-lists"
 
 NUM_TOPICS = 12
 NUM_DOCS   = 81433
-MAX_ITERS  = 1000
+MAX_ITERS  = 1
 
 WS_WEIGHT = 0.5
+SCORERS = ["NS", "WS", "CS"]
+ALGOS = ["GPR", "QTSPR", "PTSPR"]

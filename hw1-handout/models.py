@@ -72,8 +72,8 @@ class Ranker(ABC):
             print(f"Iteration: {iters}", end="\r")
         
         if iters == config.MAX_ITERS:
-            print(f"Took more than {config.MAX_ITERS} steps")
-            print("Bye bye!")
+            # print(f"\tTook more than {config.MAX_ITERS} steps")
+            # print("Bye bye!")
             return StatusCode.FAILURE
         
         else:
@@ -82,6 +82,10 @@ class Ranker(ABC):
     
     @abstractmethod
     def getRanks(self):
+        pass
+    
+    @abstractmethod
+    def genFile(self):
         pass
 
 class pageRanks(Ranker):
@@ -108,6 +112,14 @@ class pageRanks(Ranker):
     
     def getAllRanks(self):
         return np.argsort(-self.getRawScores())
+    
+    def genFile(self, *args, **kwargs):
+        lines = []
+        for i,r in enumerate(self.r):
+            lines.append(f"{i} {r}\n")
+        
+        with open("GPR.txt", "w") as f:
+            f.writelines(lines)
 
 
 class pageRanksPersonalized(Ranker):
@@ -159,6 +171,18 @@ class pageRanksPersonalized(Ranker):
         indriDocs[usr][qNo]["positions"] = positions
         
         return indriDocs
+    
+    def genFile(self, algo, u,q, topicDistribution):
+        filename = algo + "-" + f"U{u}Q{q}.txt"
+        convergedValues = np.array(self.r @ topicDistribution)
+        convergedValues = convergedValues.flatten()
+        lines = []
+        for i,r in enumerate(convergedValues):
+            lines.append(f"{i} {r}\n")
+        
+        with open(filename, "w") as f:
+            f.writelines(lines)
+            
         
 
 def getRanker(args):

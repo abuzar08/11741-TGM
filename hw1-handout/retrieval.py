@@ -12,10 +12,7 @@ def weightedSum(rawScores, relevanceScores, weight = config.WS_WEIGHT):
     return score
 
 def customSum(rawScores, relevanceScores):
-    ranksRaw = np.argsort(np.argsort(rawScores))
-    ranksRel = np.argsort(np.argsort(relevanceScores))
-    averageRank = 0.05*ranksRaw + 0.95*ranksRel
-    score = averageRank
+    score = 0.9*rawScores + 0.1*relevanceScores
     return score
 
 def getScorer(args):

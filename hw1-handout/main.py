@@ -1,4 +1,6 @@
 import argparse
+from datetime import datetime
+import time
 
 import numpy as np
 
@@ -25,59 +27,102 @@ def getArgs():
                         help="path to user-topic distribution matrix")
     
     parser.add_argument("--debug", action='store_true', default=False)
-    parser.add_argument("--algo", type=str, default="GPR", help="One of [GPR, QTSPR, PTSPR]")
+    parser.add_argument("--algo", type=str, default="all", help="One of [GPR, QTSPR, PTSPR, all]")
     parser.add_argument("--seed", type=int, default=config.SEED)
     parser.add_argument("--alpha", type=float, default=0.8)
     parser.add_argument("--beta",  type=float, default=0.1)
     parser.add_argument("--gamma", type=float, default=0.1)
-    parser.add_argument("--scorer", type=str, default="NS", help="default NS. To change, use WS or CS")
+    parser.add_argument("--scorer", type=str, default="all", help="default All. To change, use NS or WS or CS")
     
     args = parser.parse_args()
     print(f"args: {vars(args)}")
     return args
 
+def printTimeDiff(start, end, avgFactor = 1.0):
+    delta = (end - start) / avgFactor
+    deltaMinutes = delta//60
+    deltaSeconds = delta%60
+    print(f"Completed power iteration in {deltaMinutes}m and {deltaSeconds}s")
+
 if __name__ == "__main__":
     
     args = getArgs()
     dbg = utils.debugPrint(args.debug)
-        
-    np.random.seed(args.seed)
-    
-    if args.algo not in ["GPR", "QTSPR", "PTSPR"]:
-        print("Invalid Algo specified. Should be one of GPR, QTSPR, PTSPR.")
+    if args.algo not in ["GPR", "QTSPR", "PTSPR", "all"]:
+        print("Invalid Algo specified. Should be one of GPR, QTSPR, PTSPR, or all")
         exit(1)
     
-    dbg("Algorithm: ",args.algo)
-    ranker = models.getRanker(args)
-    indriDocs = utils.loadIndri()
+    if args.algo == "all":
+        algorithms = config.ALGOS
     
-    status  = ranker.run(eps=config.EPS)
+    else:
+        algorithms = [args.algo]
     
-    if status == StatusCode.FAILURE:
-        print(f"Failed to converge in {config.MAX_ITERS} iterations")
-    
-    if args.algo == "GPR":
-        queries = None
-    
-    elif args.algo == "QTSPR":
-        queries = utils.loadQueries(args.queryTopics) # dictionary
+    for algo in algorithms:
+        args.algo = algo
+        argsScorer = args.scorer
+        print("="*100)
+        print(f"Algorithm: {args.algo}")
+
+            
+        np.random.seed(args.seed)
         
-    elif args.algo == "PTSPR":
-        queries = utils.loadQueries(args.userTopics) # dictionary
         
-    for scorer in ["NS", "WS", "CS"]:
-        args.scorer = scorer
-        scoringFunction = retrieval.getScorer(args)
-        allData = []
-        for usr in indriDocs:
-            for qNo in indriDocs[usr]:
-                indriDocs = ranker.getRanks(indriDocs=indriDocs,
-                                usr= usr, qNo= qNo, 
-                                queries=queries,
-                                scoringFunction=scoringFunction)
-                data = utils.makeOuputFile(indriDocs, usr, qNo, args)
-                allData.extend(data)
         
-        utils.writeOutput(allData)
+        ranker = models.getRanker(args)
+        indriDocs = utils.loadIndri()
+        
+        rankerStartTime = time.time()
+        status  = ranker.run(eps=config.EPS)
+        rankerEndTime = time.time()
+        
+        print(f"Completed power iteration in {rankerEndTime - rankerStartTime:.3f} seconds.")
+        print("="*100)
+        
+        # if status == StatusCode.FAILURE:
+        #     print(f"Failed to converge in {config.MAX_ITERS} iterations")
+        
+        if args.algo == "GPR":
+            queries = None
+        
+        elif args.algo == "QTSPR":
+            queries = utils.loadQueries(args.queryTopics) # dictionary
+            
+        elif args.algo == "PTSPR":
+            queries = utils.loadQueries(args.userTopics) # dictionary
+        
+        
+        if args.scorer == "all":
+            scorers = config.SCORERS
+        else:
+            scorers = [args.scorer]
+        
+        for scorer in scorers:
+            args.scorer = scorer
+            scoringFunction = retrieval.getScorer(args)
+            print(f"> Retrieval function: {args.scorer}")
+            
+            retrievalStart = time.time()
+            allData = []
+            for usr in indriDocs:
+                for qNo in indriDocs[usr]:
+                    indriDocs = ranker.getRanks(indriDocs=indriDocs,
+                                    usr= usr, qNo= qNo, 
+                                    queries=queries,
+                                    scoringFunction=scoringFunction)
+                    data = utils.makeOuputFile(indriDocs, usr, qNo, args)
+                    allData.extend(data)
+            
+            retrievalEnd = time.time()
+            print(f"  Completed retrieval in {retrievalEnd - retrievalStart:.3f} seconds per query\n")
+            
+            if args.algo == "GPR":
+                ranker.genFile()
+            
+            else:
+                ranker.genFile(algo=args.algo, u=2, q=1, topicDistribution=queries[2][1])
+            # print("-"*100)
+        args.scorer = argsScorer
+    # utils.writeOutput(allData, args)
             
         
