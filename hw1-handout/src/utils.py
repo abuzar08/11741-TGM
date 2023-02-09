@@ -83,7 +83,7 @@ def loadDocTopics(fileName:str):
     col = data[:,1] - 1
     values = np.ones(data.shape[0], dtype=np.int8)
     matrix = sp.csr_matrix((values, (row, col)), dtype=np.int8, shape=(numDocs, config.NUM_TOPICS))
-    return matrix
+    return matrix.toarray()
 
 class debugPrint:
     def __init__(self, flag):
@@ -151,7 +151,7 @@ def writeOutput(data, args):
     Creates trec_eval submission files from data created by makeOutputFile()
     '''
     run_id = data[0][-1]
-    filename = f"./output/{run_id}.txt"
+    filename = f"{run_id}.txt"
     writeLines = []
     rank = 0
     last_id = None
@@ -208,7 +208,7 @@ def getArgs():
     parser.add_argument("--scorer", type=str, default="all", 
                         help="default All. To change, use NS or WS or CS")
     
-    parser.add_argument("--no_op", action='store_false', default=True,
+    parser.add_argument("--no_op", action='store_true', default=False,
                         help="Set to BLOCK creation of output files for trec_eval.")
     
     

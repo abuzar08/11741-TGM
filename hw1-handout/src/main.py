@@ -94,7 +94,7 @@ if __name__ == "__main__":
             else:
                 ranker.genFile(algo=args.algo, u=2, q=1, topicDistribution=queries[2][1])
         
-            if args.output:
+            if not args.no_op:
                 '''
                 If required to create output file for trec_eval
                 '''

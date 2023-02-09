@@ -97,7 +97,7 @@ class pageRanks(Ranker):
         self.alpha = 1-args.alpha
         if self.r is None:
             # self.r = np.random.normal(0,1,size=self.numDocs)
-            self.r = np.zeros(self.numDocs)
+            self.r = np.ones(self.numDocs) / self.numDocs
     
     def getRanks(self, indriDocs, usr, qNo, scoringFunction = retrieval.base, queries=None):
         '''
@@ -105,6 +105,7 @@ class pageRanks(Ranker):
         calculate final scores and ranks of each document in indrilists.
         '''
         scores = self.getRawScores()
+        assert np.allclose(scores.sum(), 1.0, rtol=1e-4)
         docs   = indriDocs[usr][qNo]["docs"]
         
         rawScores = scores[docs-1]
@@ -127,7 +128,7 @@ class pageRanks(Ranker):
         for i,r in enumerate(self.r):
             lines.append(f"{i+1} {r}\n")
         
-        with open("GPR.txt", "w") as f:
+        with open("../GPR.txt", "w") as f:
             f.writelines(lines)
 
 
@@ -149,15 +150,14 @@ class pageRanksPersonalized(Ranker):
         assert self.alpha + self.beta + self.gamma == 1.0, f"Non-convex weights"
         
         # normalized doctopics
-        rowSums = np.array(docTopics.sum(axis=1))[:,0]
-        rows,cols = docTopics.nonzero()
-        docTopics.data = docTopics.data / rowSums[rows]
+        rowSums = np.sum(docTopics, axis=1, keepdims=True)
+        docTopics = docTopics / rowSums
         
         self.p_t = docTopics.T # (numDocs,12)
         self.p_0 = np.ones((self.numDocs, config.NUM_TOPICS)) / self.numDocs
         if self.r is None:
             # self.r   = np.random.normal(0,1,size=(self.numDocs, config.NUM_TOPICS))
-            self.r   = np.zeros((self.numDocs, config.NUM_TOPICS))
+            self.r   = np.ones((self.numDocs, config.NUM_TOPICS)) / self.numDocs
     
     def step(self):
         '''
@@ -169,6 +169,7 @@ class pageRanksPersonalized(Ranker):
         rawScores = self.getRawScores()
         personalizedScores = rawScores @ topicDistribution
         personalizedScores = personalizedScores.flatten()
+        assert np.allclose(personalizedScores.sum(), 1.0, rtol=1e-4)
         return personalizedScores
     
     def getRanks(self, indriDocs, queries, usr, qNo, scoringFunction = retrieval.base):
@@ -194,7 +195,7 @@ class pageRanksPersonalized(Ranker):
         '''
         Generate sample file for submission
         '''
-        filename = algo + "-" + f"U{u}Q{q}.txt"
+        filename = f"../{algo}-U{u}Q{q}.txt"
         convergedValues = np.array(self.r @ topicDistribution)
         convergedValues = convergedValues.flatten()
         lines = []

@@ -20,13 +20,10 @@ def customSum(rawScores, relevanceScores):
     '''
     
     '''
-    normalizedRaw = (rawScores - np.min(rawScores)) / np.sum(rawScores - np.min(rawScores))
-    argsorted = np.argsort(rawScores)
-    numScores = len(argsorted)
-    normalizedRaw[argsorted[:(98*numScores//100)]] = 0
-    score = relevanceScores + normalizedRaw
-    # score = 0.9*rawScores + 0.1*relevanceScores
-    return score
+    bonusProbs = (rawScores - np.min(rawScores)) / np.sum(rawScores - np.min(rawScores))
+    bonusPoints = np.array([np.random.binomial(n=config.NUM_BINOMIAL_TRIALS,p=bonusProbs[i],size=1) for i in range(len(bonusProbs))]).flatten() / config.NUM_BINOMIAL_TRIALS
+    scores = relevanceScores + bonusPoints
+    return scores
 
 def getScorer(args):
     if args.scorer == "NS":
